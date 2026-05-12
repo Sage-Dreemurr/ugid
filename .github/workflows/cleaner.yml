@@ -1,11 +1,13 @@
----
-name: 🗑 3-Clean downloads folder
+name: 🗑 Clean selected folder
 
 on:
   workflow_dispatch:
     inputs:
+      target_folder:
+        description: '📂 Folder path to clean (example: downloads, build/output)'
+        required: true
       warning:
-        description: '⚠️ WARNING: This will DELETE ALL files inside downloads/ folder. Click "Run workflow" only if you are sure.'
+        description: '⚠️ WARNING: This will DELETE ALL files inside the selected folder.'
         required: false
         default: 'Read this warning before proceeding'
 
@@ -28,32 +30,40 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-      - name: Clean and recreate downloads folder
+      - name: Clean and recreate selected folder
         run: |
           BRANCH="${GITHUB_REF_NAME}"
+          TARGET_FOLDER="${{ inputs.target_folder }}"
 
-          echo "AVASAM (https://avasam.ir) - Cleaning downloads folder"
+          echo "AVASAM (https://avasam.ir)"
+          echo "Requested folder to clean: $TARGET_FOLDER"
           echo ""
 
-          if [ -d "downloads" ]; then
-            echo "Removing downloads folder..."
-            git rm -rf downloads/ 2>/dev/null || true
-            rm -rf downloads/ 2>/dev/null || true
-          else
-            echo "Downloads folder doesn't exist, will create it."
+          # ---- SAFETY CHECKS ----
+          if [ -z "$TARGET_FOLDER" ] || [ "$TARGET_FOLDER" = "/" ] || [ "$TARGET_FOLDER" = "." ]; then
+            echo "❌ Refusing to delete unsafe path: '$TARGET_FOLDER'"
+            exit 1
           fi
 
-          mkdir -p downloads
-          printf '## empty\nfor start go Action tab and use left side workflows\n' > downloads/README.md
+          if [ -d "$TARGET_FOLDER" ]; then
+            echo "Removing folder contents..."
+            git rm -rf "$TARGET_FOLDER" 2>/dev/null || true
+            rm -rf "$TARGET_FOLDER" 2>/dev/null || true
+          else
+            echo "Folder doesn't exist, will create it."
+          fi
 
-          git add -f downloads/README.md
+          mkdir -p "$TARGET_FOLDER"
+          printf '## empty\nCleaned via GitHub Actions\n' > "$TARGET_FOLDER/README.md"
+
+          git add -f "$TARGET_FOLDER/README.md"
 
           if git diff --staged --quiet; then
             echo "No changes to commit."
             exit 0
           fi
 
-          git commit -m "[AVASAM] Clean downloads folder [skip ci]"
+          git commit -m "[AVASAM] Clean $TARGET_FOLDER folder [skip ci]"
 
           echo "Pushing changes..."
 
@@ -68,17 +78,17 @@ jobs:
               git reset --hard HEAD~1 2>/dev/null || true
               git pull --rebase origin "$BRANCH" 2>/dev/null || true
 
-              rm -rf downloads/ 2>/dev/null || true
-              mkdir -p downloads
-              printf '## empty\nfor start go Action tab and use left side workflows\n' > downloads/README.md
-              git add -f downloads/README.md
-              git commit -m "[AVASAM] Clean downloads folder [skip ci]" 2>/dev/null || true
+              rm -rf "$TARGET_FOLDER" 2>/dev/null || true
+              mkdir -p "$TARGET_FOLDER"
+              printf '## empty\nCleaned via GitHub Actions\n' > "$TARGET_FOLDER/README.md"
+              git add -f "$TARGET_FOLDER/README.md"
+              git commit -m "[AVASAM] Clean $TARGET_FOLDER folder [skip ci]" 2>/dev/null || true
             }
 
             if timeout 60 git push origin HEAD:"$BRANCH" 2>&1; then
               echo ""
               echo "=========================================="
-              echo "✅ Downloads folder cleared successfully!"
+              echo "✅ Folder '$TARGET_FOLDER' cleared successfully!"
               echo "AVASAM (https://avasam.ir)"
               echo "=========================================="
               exit 0
